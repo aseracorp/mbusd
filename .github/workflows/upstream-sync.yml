@@ -44,10 +44,75 @@ jobs:
             echo "upstream-tip=${UPSTREAM_TIP}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Merge upstream into master and push
+      - name: Merge upstream into master (auto-resolving)
         if: env.changed == 'true'
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Register the 'ours' merge driver for fork-owned files
+          # (.gitattributes marks them; not configured by default on runners).
+          git config merge.ours.driver true
+
+          # Try a plain merge first - most daily syncs are clean.
+          set +e
           git merge --no-edit upstream/master
+          MERGE_RC=$?
+          set -e
+          if [ "$MERGE_RC" -eq 0 ]; then
+            echo "Merged cleanly."
+            git push origin master
+            exit 0
+          fi
+
+          echo "Merge conflicts - resolving by 3-way merge-file policy..."
+          MB=$(git merge-base HEAD upstream/master)
+          CONFLICTED=$(git diff --name-only --diff-filter=U || true)
+          for f in $CONFLICTED; do
+            echo "  resolving: $f"
+            case "$f" in
+              # Fork-owned files: never take upstream's version.
+              src/mdns.c|src/mdns.h|.github/workflows/*|.github/disabled-workflows/*)
+                git checkout --ours -- "$f"
+                git add -- "$f"
+                ;;
+              # Shared files: proper 3-way merge (base + ours + theirs).
+              # This keeps BOTH non-overlapping changes; for identical-line
+              # overlaps the fork side wins (deliberate fork policy).
+              *)
+                git show "$MB:$f"    > /tmp/base-f
+                git show "HEAD:$f"   > /tmp/ours-f
+                git show "upstream/master:$f" > /tmp/theirs-f
+                git merge-file -p /tmp/ours-f /tmp/base-f /tmp/theirs-f \
+                  > /tmp/merged-f || true
+                # Drop any residual conflict markers, preferring our side.
+                python3 - <<'PYEOF'
+p = '/tmp/merged-f'
+lines = open(p).read().splitlines()
+res, i = [], 0
+while i < len(lines):
+    if lines[i].startswith('<<<<<<<'):
+        i += 1
+        ours = []
+        while i < len(lines) and not lines[i].startswith('======='):
+            ours.append(lines[i]); i += 1
+        while i < len(lines) and not lines[i].startswith('>>>>>>>'):
+            i += 1
+        res.extend(ours); i += 1
+    else:
+        res.append(lines[i]); i += 1
+open(p, 'w').write('\n'.join(res) + '\n')
+PYEOF
+                cp /tmp/merged-f "$f"
+                git add -- "$f"
+                ;;
+            esac
+          done
+
+          git commit --no-edit
           git push origin master
+
+      - name: Report result
+        if: always()
+        run: |
+          git log --oneline -2

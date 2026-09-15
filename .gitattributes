@@ -1,0 +1,7 @@
+# Fork-owned files: never take upstream's version on merge (upstream has
+# no equivalent; keeping ours is always correct).
+src/mdns.c        merge=ours
+src/mdns.h        merge=ours
+.github/workflows/upstream-sync.yml merge=ours
+.github/workflows/docker-image.yml  merge=ours
+.github/disabled-workflows/*        merge=ours

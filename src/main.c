@@ -189,6 +189,39 @@ main(int argc, char *argv[])
 
   cfg_init();
 
+  {
+    /* Parse the mDNS/DNS-SD announcement option (-M name) manually instead
+     * of adding it to the getopt string. Keeping it out of getopt means new
+     * upstream command line options never collide with ours on merge.
+     * -M name  : set instance name
+     * -M -     : disable the announcement
+     */
+    int i, j;
+    for (i = 1; i < argc; i++)
+    {
+      if (!strcmp(argv[i], "-M"))
+      {
+        if (i + 1 >= argc)
+        {
+          printf("%s: -M requires an argument (use -M - to disable mDNS)\n", argv[0]);
+          exit(-1);
+        }
+        if (!strcmp(argv[++i], "-") || !strlen(argv[i]))
+          cfg.mdns = FALSE;
+        else
+        {
+          cfg.mdns = TRUE;
+          strncpy(cfg.mdnsname, argv[i], INTBUFSIZE);
+        }
+        /* remove -M and its argument from argv so getopt ignores them */
+        for (j = i - 1; j < argc - 1; j++)
+          argv[j] = argv[j + 1];
+        argc -= 2;
+        i--;
+      }
+    }
+  }
+
   if ((exename = strrchr(argv[0], '/')) == NULL)
     exename = argv[0];
   else
@@ -206,7 +239,7 @@ main(int argc, char *argv[])
 #ifdef LOG
                "v:L:"
 #endif
-               "p:s:m:A:P:C:N:R:W:T:c:bM:")) != RC_ERR)
+               "p:s:m:A:P:C:N:R:W:T:c:b")) != RC_ERR)
   {
     switch (rc)
     {
@@ -390,16 +423,6 @@ main(int argc, char *argv[])
         break;
       case 'b':
         cfg.replyonbroadcast = 1;
-        break;
-      case 'M':
-        /* empty name or "-" disables the mDNS/DNS-SD announcement */
-        if (!strlen(optarg) || !strcmp(optarg, "-"))
-          cfg.mdns = FALSE;
-        else
-        {
-          cfg.mdns = TRUE;
-          strncpy(cfg.mdnsname, optarg, INTBUFSIZE);
-        }
         break;
       case 'h':
         usage(exename);
