@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.3] - 2026-04-07
+- Add one char delay before switching TRX control (#115).
+- CMakeLists: update min version to 3.10 for CMake >= 4.0 support (#126).
+- Support vendor-specific Modbus RTU function codes.
+
 ## [0.5.2] - 2024-03-27
 - Make use of Linux RS-485 support (#97).
 - Add flag `-r` to support inverted RTS flow control(#98).
@@ -88,6 +93,7 @@
 ## 0.1.1 - 2003-09-13
 ### Initial release
 
+[0.5.3]: https://github.com/3cky/mbusd/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/3cky/mbusd/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/3cky/mbusd/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/3cky/mbusd/compare/v0.4.0...v0.5.0

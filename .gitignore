@@ -7,5 +7,6 @@
 .project
 .cproject
 .pydevproject
+.cache
 /build
 build.sh

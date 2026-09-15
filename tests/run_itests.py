@@ -124,6 +124,39 @@ class TestModbusRequests(unittest.TestCase):
         self.assertEqual(result.original_code, 5, result) # fc05 Write Single Coil
         self.assertEqual(result.exception_code, 2, result) # Illegal Data Address
 
+    def test_vendorSpecificFc(self):
+        import socket, struct
+        # FC 0x42 (vendor-specific): RTU slave echoes the payload back.
+        # Wire format after FC: [data_len(1)] [data(data_len)]
+        payload    = bytes([0xDE, 0xAD])
+        unit_id    = 1
+        fc         = 0x42
+        tid        = 0x00FF
+        pdu        = bytes([unit_id, fc, len(payload)]) + payload
+        frame      = struct.pack('>HHH', tid, 0, len(pdu)) + pdu
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect(('127.0.0.1', MBUSD_PORT))
+        sock.sendall(frame)
+
+        # read MBAP header (6 bytes), then PDU
+        header = b''
+        while len(header) < 6:
+            header += sock.recv(6 - len(header))
+        resp_tid, resp_proto, resp_len = struct.unpack('>HHH', header)
+        resp_pdu = b''
+        while len(resp_pdu) < resp_len:
+            resp_pdu += sock.recv(resp_len - len(resp_pdu))
+        sock.close()
+
+        self.assertEqual(resp_tid,       tid,          "transaction id mismatch")
+        self.assertEqual(resp_proto,     0,            "protocol id must be 0")
+        self.assertEqual(resp_pdu[0],    unit_id,      "unit id mismatch")
+        self.assertEqual(resp_pdu[1],    fc,           "FC must not be an exception")
+        self.assertEqual(resp_pdu[2],    len(payload), "length byte mismatch")
+        self.assertEqual(resp_pdu[3:],   payload,      "echoed payload mismatch")
+
     def test_broadcast(self):
         registers = [random.randrange(8) for i in range(8)]
         # 16 Write Multiple Holding Registers

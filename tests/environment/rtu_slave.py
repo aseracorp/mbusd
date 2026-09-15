@@ -20,6 +20,55 @@ from pymodbus.device import ModbusDeviceIdentification
 from pymodbus.datastore import ModbusSequentialDataBlock
 from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext
 from pymodbus.transaction import ModbusRtuFramer, ModbusAsciiFramer
+from pymodbus.pdu import ModbusRequest, ModbusResponse
+
+
+class VendorSpecificRequest(ModbusRequest):
+    """Vendor-specific FC 0x42: echoes request payload back in the response.
+
+    Wire format (after FC byte): [data_len(1)] [data(data_len)]
+    """
+    function_code = 0x42
+
+    def __init__(self, data=b'', **kwargs):
+        super().__init__(**kwargs)
+        self.data = bytes(data)
+
+    def encode(self):
+        return bytes([len(self.data)]) + self.data
+
+    def decode(self, data):
+        self.data = bytes(data[1:1 + data[0]])
+
+    @classmethod
+    def calculateRtuFrameSize(cls, buffer):
+        # buffer: [addr, FC, data_len, data..., CRC(2)]
+        if len(buffer) < 3:
+            raise IndexError
+        return 1 + 1 + 1 + buffer[2] + 2
+
+    async def execute(self, context):
+        return VendorSpecificResponse(data=self.data)
+
+
+class VendorSpecificResponse(ModbusResponse):
+    function_code = 0x42
+
+    def __init__(self, data=b'', **kwargs):
+        super().__init__(**kwargs)
+        self.data = bytes(data)
+
+    def encode(self):
+        return bytes([len(self.data)]) + self.data
+
+    def decode(self, data):
+        self.data = bytes(data[1:1 + data[0]])
+
+    @classmethod
+    def calculateRtuFrameSize(cls, buffer):
+        if len(buffer) < 3:
+            raise IndexError
+        return 1 + 1 + 1 + buffer[2] + 2
 
 from os import readlink
 
@@ -112,7 +161,8 @@ class ModbusSerialServer:
         #---------------------------------------------------------------------------#
         #StartTcpServer(context, identity=identity, address=("localhost", 5020))
         #StartUdpServer(context, identity=identity, address=("localhost", 502))
-        StartSerialServer(context=context, identity=identity, port=self.serialPort, baudrate=19200, framer=framer, broadcast_enable=True)
+        StartSerialServer(context=context, identity=identity, port=self.serialPort, baudrate=19200, framer=framer, broadcast_enable=True,
+                          custom_functions=[VendorSpecificRequest])
         #StartSerialServer(context, identity=identity, port='/dev/pts/3', framer=ModbusAsciiFramer)
 
     p = None

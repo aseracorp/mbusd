@@ -101,7 +101,7 @@ void
 usage(char *exename)
 {
   cfg_init();
-  printf("%s-%s Copyright (C) 2002-2003, 2011, 2013-2024 Victor Antonovich <v.antonovich@gmail.com>, "
+  printf("%s-%s Copyright (C) 2002-2003, 2011, 2013-2026 Victor Antonovich <v.antonovich@gmail.com>, "
    "Andrew Denysenko <nitr0@seti.kr.ua>\n\n"
    "Usage: %s [-h] [-d] "
 #ifdef LOG
@@ -112,7 +112,7 @@ usage(char *exename)
 #ifdef HAVE_TIOCRS485
    " [-S]"
 #endif
-   "\n"   
+   "\n"
 #ifdef TRXCTL
    "             [-t] [-r] [-y sysfsfile] [-Y sysfsfile]\n"
 #endif
@@ -136,7 +136,7 @@ usage(char *exename)
    "  -m mode    : set serial port mode (default is %s)\n"
 #ifdef HAVE_TIOCRS485
    "  -S         : enable Linux RS-485 support for given serial port device\n"
-#endif   
+#endif
 #ifdef TRXCTL
    "  -t         : enable RTS RS-485 data direction control using RTS, active transmit\n"
    "  -r         : enable RTS RS-485 data direction control using RTS, active receive\n"
@@ -194,7 +194,7 @@ main(int argc, char *argv[])
   while ((rc = getopt(argc, argv,
                "dh"
 #ifdef TRXCTL
-               "ty:Y:"
+               "try:Y:"
 #endif
 #ifdef HAVE_TIOCRS485
                "S"
