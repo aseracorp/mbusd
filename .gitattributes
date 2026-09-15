@@ -1,7 +1,11 @@
-# Fork-owned files: never take upstream's version on merge (upstream has
-# no equivalent; keeping ours is always correct).
-src/mdns.c        merge=ours
-src/mdns.h        merge=ours
+# Fork-only files that upstream has no equivalent of - keeping ours is
+# always correct and there is nothing upstream could contribute to them.
+src/mdns.c                    merge=ours
+src/mdns.h                    merge=ours
 .github/workflows/upstream-sync.yml merge=ours
 .github/workflows/docker-image.yml  merge=ours
-.github/disabled-workflows/*        merge=ours
+
+# NOTE: .github/disabled-workflows/* are upstream's OWN CI files that we
+# merely moved out of the way. They must NOT use merge=ours - upstream
+# changes to them must still be tracked (and re-disabled only if ever
+# re-enabled). No merge driver here.

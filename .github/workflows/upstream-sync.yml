@@ -44,14 +44,13 @@ jobs:
             echo "upstream-tip=${UPSTREAM_TIP}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Merge upstream into master (auto-resolving)
+      - name: Merge upstream into master (auto-resolving, never drops code)
         if: env.changed == 'true'
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Register the 'ours' merge driver for fork-owned files
-          # (.gitattributes marks them; not configured by default on runners).
+          # Register the 'ours' merge driver for fork-only files.
           git config merge.ours.driver true
 
           # Try a plain merge first - most daily syncs are clean.
@@ -65,45 +64,44 @@ jobs:
             exit 0
           fi
 
-          echo "Merge conflicts - resolving by 3-way merge-file policy..."
+          # A plain merge failed. Distinguish:
+          #  - conflicts ONLY in fork-only files (mdns.c/h, our workflows)
+          #    => safe to auto-resolve by keeping ours.
+          #  - conflicts in shared/upstream files => resolve with a proper
+          #    3-way merge (git merge-file) that keeps BOTH sides.
+          #  - any residual conflict markers after that => FAIL LOUDLY.
+          #    We NEVER silently drop either side's code.
           MB=$(git merge-base HEAD upstream/master)
           CONFLICTED=$(git diff --name-only --diff-filter=U || true)
+          echo "conflicted files: $CONFLICTED"
+
           for f in $CONFLICTED; do
-            echo "  resolving: $f"
             case "$f" in
-              # Fork-owned files: never take upstream's version.
-              src/mdns.c|src/mdns.h|.github/workflows/*|.github/disabled-workflows/*)
+              src/mdns.c|src/mdns.h|.github/workflows/upstream-sync.yml|.github/workflows/docker-image.yml)
+                echo "  fork-only file, keeping ours: $f"
                 git checkout --ours -- "$f"
                 git add -- "$f"
                 ;;
-              # Shared files: proper 3-way merge (base + ours + theirs).
-              # This keeps BOTH non-overlapping changes; for identical-line
-              # overlaps the fork side wins (deliberate fork policy).
               *)
-                git show "$MB:$f"    > /tmp/base-f
-                git show "HEAD:$f"   > /tmp/ours-f
+                echo "  3-way merging shared file: $f"
+                git show "$MB:$f" > /tmp/base-f
+                git show "HEAD:$f" > /tmp/ours-f
                 git show "upstream/master:$f" > /tmp/theirs-f
-                git merge-file -p /tmp/ours-f /tmp/base-f /tmp/theirs-f \
-                  > /tmp/merged-f || true
-                # Drop any residual conflict markers, preferring our side.
-                python3 - <<'PYEOF'
-p = '/tmp/merged-f'
-lines = open(p).read().splitlines()
-res, i = [], 0
-while i < len(lines):
-    if lines[i].startswith('<<<<<<<'):
-        i += 1
-        ours = []
-        while i < len(lines) and not lines[i].startswith('======='):
-            ours.append(lines[i]); i += 1
-        while i < len(lines) and not lines[i].startswith('>>>>>>>'):
-            i += 1
-        res.extend(ours); i += 1
-    else:
-        res.append(lines[i]); i += 1
-open(p, 'w').write('\n'.join(res) + '\n')
-PYEOF
-                cp /tmp/merged-f "$f"
+                # merge-file returns 1 on genuine conflict; capture it
+                # without letting set -e abort mid-resolution.
+                set +e
+                git merge-file /tmp/ours-f /tmp/base-f /tmp/theirs-f
+                MF_RC=$?
+                set -e
+                if [ "$MF_RC" -ne 0 ]; then
+                  echo "::error::Genuine conflict in '$f' that cannot be auto-resolved."
+                  echo "::error::git merge-file left conflict markers for '$f'."
+                  echo "::error::A maintainer must merge upstream/master into master manually"
+                  echo "::error::and resolve '$f', then push. Aborting to keep the tree clean."
+                  git merge --abort
+                  exit 1
+                fi
+                cp /tmp/ours-f "$f"
                 git add -- "$f"
                 ;;
             esac
