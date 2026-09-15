@@ -16,6 +16,8 @@ Features:
 * Robustness - can retry requests with mismatched response CRC
 * Flexible RTU modes - speed/parity/stop-bits/timeouts can be configured for RTU network
 * Support for both of automatic and manual (using RTS bit) direction control types for RS-485 transceivers
+* mDNS/DNS-SD service announcement - the Modbus TCP endpoint is announced as
+  `_modbus-tcp._tcp` on the local network for automatic discovery (requires Avahi)
 
 Supported function codes:
 -------------------------
@@ -56,7 +58,7 @@ Usage:
              [-p device] [-s speed] [-m mode] [-S]
              [-t] [-r] [-y sysfsfile] [-Y sysfsfile] 
              [-A address] [-P port] [-C maxconn] [-N retries]
-             [-R pause] [-W wait] [-T timeout] [-b]
+             [-R pause] [-W wait] [-T timeout] [-b] [-M mdnsname]
 
        -h     Usage help.
        -d     Instruct mbusd not to fork itself (non-daemonize).
@@ -154,6 +156,26 @@ docker run -d --privileged \
 ```
 
 where `/path/to/mbusd.conf` is the path to **mbusd** config file in the local filesystem.
+
+mDNS/DNS-SD announcement:
+-------------------------
+
+Since v0.5.3 **mbusd** announces its Modbus TCP endpoint on the local network via
+mDNS/DNS-SD under the service type `_modbus-tcp._tcp` (standardized for Modbus
+TCP gateways). mDNS-aware clients (Home Assistant, iOS apps, `avahi-browse`,
+`dns-sd`, ...) can then discover the gateway automatically instead of entering
+IP and port manually.
+
+The announcement is enabled by default. It requires the Avahi daemon
+(`avahi-daemon`) or another mDNS responder to be running on the host. In
+containers without an mDNS responder, or when Avahi development headers are not
+available at compile time, the feature is a harmless no-op.
+
+Configuration:
+
+* `mdns = yes|no` in `mbusd.conf` or `-M name` / `-M -` on the command line.
+* `mdnsname = ...` in `mbusd.conf` sets a custom instance name (default:
+  `'<hostname>: Modbus TCP gateway'`).
 
 Contributing:
 -------------

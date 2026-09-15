@@ -38,6 +38,8 @@ mbusd \- MODBUS/TCP to MODBUS/RTU gateway.
 .RB [ -T
 .IR timeout ]
 .RB [ -b ]
+.RB [ -M
+.IR mdnsname ]
 .SH DESCRIPTION
 \fImbusd\fR is MODBUS/TCP to MODBUS/RTU gateway.
 .SH OPTIONS
@@ -89,6 +91,10 @@ Specifies response wait time in milliseconds.
 Specifies connection timeout value in seconds (0 - disable timeout).
 .IP "\fB-b\fR"
 Instructs \fImbusd\fR to reply on a broadcast.
+.IP "\fB-M \fImdnsname\fR"
+Sets the instance name used for the mDNS/DNS-SD announcement of the Modbus TCP
+endpoint (service type \fI_modbus-tcp._tcp\fR). The default instance name is
+'<hostname>: Modbus TCP gateway'. Pass '-M -' to disable the announcement.
 .SH NOTES
 In case of situation when \fImbusd\fR received response with invalid CRC and can't correct
 error by re-request, it return MODBUS/TCP packet with exception code 04. In case of situation

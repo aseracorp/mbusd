@@ -31,6 +31,19 @@ option(DEBUG_LOG "extra debug log info" ON)
 if(DEBUG_LOG)
     add_definitions(-DDEBUG)
 endif()
+option(MDNS "announce Modbus TCP endpoint via mDNS/DNS-SD (requires Avahi)" ON)
+if(MDNS)
+    find_package(PkgConfig)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(AVAHI avahi-client)
+        if(AVAHI_FOUND)
+            add_definitions(-DHAVE_AVAHI)
+            message(STATUS "mDNS support enabled (Avahi ${AVAHI_VERSION})")
+        else()
+            message(WARNING "avahi-client not found - building WITHOUT mDNS support")
+        endif()
+    endif()
+endif()
 
 ## check for and pass preprocessor flags
 check_function_exists(cfmakeraw  HAVE_CFMAKERAW)
@@ -74,8 +87,13 @@ set(mbusd_SOURCES
         src/sig.c
         src/sock.c
         src/util.c
+        src/mdns.c
         )
 add_executable(mbusd ${mbusd_SOURCES})
+if(AVAHI_FOUND)
+    target_link_libraries(mbusd ${AVAHI_LIBRARIES} pthread)
+    target_include_directories(mbusd PRIVATE ${AVAHI_INCLUDE_DIRS})
+endif()
 install(TARGETS mbusd DESTINATION bin)
 
 # aggregate the man page template

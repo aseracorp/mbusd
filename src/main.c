@@ -41,6 +41,7 @@
 #include "queue.h"
 #include "sig.h"
 #include "util.h"
+#include "mdns.h"
 #ifdef LOG
 #  include "log.h"
 #endif
@@ -117,7 +118,8 @@ usage(char *exename)
    "             [-t] [-r] [-y sysfsfile] [-Y sysfsfile]\n"
 #endif
    "             [-A address] [-P port] [-C maxconn] [-N retries]\n"
-   "             [-R pause] [-W wait] [-T timeout] [-b]\n\n"
+   "             [-R pause] [-W wait] [-T timeout] [-b]\n"
+   "             [-M mdnsname]\n\n"
    "Options:\n"
    "  -h         : this help\n"
    "  -d         : don't fork (non-daemonize)\n"
@@ -157,7 +159,9 @@ usage(char *exename)
    "               (1-%d, default is %lu)\n"
    "  -T timeout : set connection timeout value in seconds\n"
    "               (0-%d, default is %d, 0 disables timeout)\n"
-   "  -b         : enable reply on broadcast"
+   "  -b         : enable reply on broadcast\n"
+   "  -M name    : set mDNS/DNS-SD announcement instance name (default is\n"
+   "               '<hostname>: Modbus TCP gateway', empty disables announcement)\n"
    "\n", PACKAGE, VERSION, exename,
 #ifdef LOG
       LOGPATH, LOGNAME, cfg.dbglvl,
@@ -202,7 +206,7 @@ main(int argc, char *argv[])
 #ifdef LOG
                "v:L:"
 #endif
-               "p:s:m:A:P:C:N:R:W:T:c:b")) != RC_ERR)
+               "p:s:m:A:P:C:N:R:W:T:c:bM:")) != RC_ERR)
   {
     switch (rc)
     {
@@ -387,6 +391,16 @@ main(int argc, char *argv[])
       case 'b':
         cfg.replyonbroadcast = 1;
         break;
+      case 'M':
+        /* empty name or "-" disables the mDNS/DNS-SD announcement */
+        if (!strlen(optarg) || !strcmp(optarg, "-"))
+          cfg.mdns = FALSE;
+        else
+        {
+          cfg.mdns = TRUE;
+          strncpy(cfg.mdnsname, optarg, INTBUFSIZE);
+        }
+        break;
       case 'h':
         usage(exename);
         break;
@@ -423,7 +437,24 @@ main(int argc, char *argv[])
     exit(rc);
   }
 
+  /* announce the Modbus TCP endpoint via mDNS/DNS-SD (if enabled) */
+  if (cfg.mdns)
+  {
+    if (mdns_init(cfg.mdnsname, NULL, cfg.serverport) != RC_OK)
+    {
+#ifdef LOG
+      logw(1, "mdns_init() failed, continuing without mDNS announcement");
+#endif
+    }
+  }
+#ifdef LOG
+  else
+    logw(2, "mDNS/DNS-SD announcement disabled");
+#endif
+
   conn_loop();
+
+  mdns_cleanup();
   err = errno;
 #ifdef LOG
   logw(2, "%s-%s exited...", PACKAGE, VERSION);

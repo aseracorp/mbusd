@@ -80,6 +80,10 @@ typedef struct
   unsigned long respwait;
   /* reply to client on broadcast */
   int replyonbroadcast;
+  /* mDNS/DNS-SD announcement enable flag */
+  bool mdns;
+  /* mDNS/DNS-SD announcement instance name (may be empty) */
+  char mdnsname[INTBUFSIZE + 1];
 } cfg_t;
 
 /* Prototypes */

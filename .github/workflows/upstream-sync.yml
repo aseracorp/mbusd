@@ -1,0 +1,53 @@
+name: Sync upstream fork
+
+on:
+  # Daily check for upstream changes (a cheap upstream-SHA ancestor check
+  # skips the fetch/merge entirely when nothing changed).
+  schedule:
+    - cron: '23 3 * * *'
+  # Allow manual runs from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-master:
+    runs-on: ubuntu-latest
+
+    env:
+      UPSTREAM: 3cky/mbusd
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream https://github.com/${{ env.UPSTREAM }}.git
+          git fetch upstream master
+
+      - name: Check if upstream tip is already merged in
+        id: changed
+        run: |
+          UPSTREAM_TIP=$(git rev-parse upstream/master)
+          echo "upstream_tip=${UPSTREAM_TIP}"
+          # Already an ancestor of our local branch => nothing to do.
+          if git merge-base --is-ancestor "${UPSTREAM_TIP}" HEAD; then
+            echo "No upstream change; already in sync."
+          else
+            echo "Upstream has new commits."
+            echo "changed=true" >> "$GITHUB_ENV"
+            echo "upstream-tip=${UPSTREAM_TIP}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream into master and push
+        if: env.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit upstream/master
+          git push origin master

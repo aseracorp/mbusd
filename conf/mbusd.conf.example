@@ -46,6 +46,17 @@ maxconn = 32
 # Connection timeout value in seconds
 timeout = 60
 
+############# mDNS/DNS-SD settings #############
+
+# Announce the Modbus TCP endpoint via mDNS/DNS-SD (service type
+# _modbus-tcp._tcp) so it can be discovered automatically on the local
+# network. Requires Avahi (or another mDNS responder) to be running.
+mdns = yes
+
+# Instance name used for the mDNS announcement. Defaults to
+# '<hostname>: Modbus TCP gateway' when empty.
+# mdnsname = My Modbus Gateway
+
 ######### Request/response settings #########
 
 # Maximum number of request retries

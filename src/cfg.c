@@ -80,6 +80,8 @@ cfg_init(void)
   cfg.respwait = DEFAULT_RESPWAIT;
   cfg.conntimeout = DEFAULT_CONNTIMEOUT;
   cfg.replyonbroadcast=0;
+  cfg.mdns = TRUE;
+  *cfg.mdnsname = '\0';
 }
 
 int
@@ -164,6 +166,14 @@ cfg_handle_param(char *name, char *value)
    else if (CFG_NAME_MATCH("replyonbroadcast"))
   {
     cfg.replyonbroadcast = CFG_VALUE_BOOL();
+  }
+  else if (CFG_NAME_MATCH("mdns"))
+  {
+    cfg.mdns = CFG_VALUE_BOOL();
+  }
+  else if (CFG_NAME_MATCH("mdnsname"))
+  {
+    strncpy(cfg.mdnsname, value, INTBUFSIZE);
   }
   else if (CFG_NAME_MATCH("timeout"))
   {
