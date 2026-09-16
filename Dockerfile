@@ -10,6 +10,11 @@ FROM alpine:latest AS scratch
 ENV QEMU_EXECVE=1
 RUN apk add --no-cache libc6-compat avahi
 COPY --from=build /usr/bin/mbusd /usr/bin/mbusd
-# Start the Avahi mDNS responder for the mDNS/DNS-SD announcement, then run
-# the gateway (defaults: foreground, log to stdout, /dev/ttyS0 @ 9600 8N1)
-CMD ["sh", "-c", "dbus-daemon --system --fork 2>/dev/null; avahi-daemon --daemonize --no-chroot 2>/dev/null; exec /usr/bin/mbusd -d -L - -p /dev/ttyS0 -s 9600 -m 8N1"]
+# Entrypoint starts dbus + avahi-daemon (for the mDNS announcement), then
+# execs the gateway. Preserves upstream's "override args via command" contract.
+COPY docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
+RUN chmod +x /usr/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+# Default args (override via `command` / docker run args):
+#   -d foreground | -L - log to stdout | -p serial port | -s baud | -m parity
+CMD ["-d", "-L", "-", "-p", "/dev/ttyS0", "-s", "9600", "-m", "8N1"]
