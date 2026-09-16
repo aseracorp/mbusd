@@ -1,0 +1,22 @@
+# mbusd mDNS/DNS-SD announcement - Avahi daemon config
+# The entrypoint replaces %INTERFACES% with the container's non-loopback
+# network interfaces (comma separated), so the _modbus-tcp._tcp service is
+# announced on EVERY connected network, not just the default route one.
+[server]
+host-name=mbusd
+# Announce on every interface that is actually connected in the container.
+allow-interfaces=%INTERFACES%
+# Don't ever think we are the only mDNS responder on the network; cooperate.
+disallow-other-stacks=no
+
+[wide-area]
+enable-wide-area=no
+
+[publish]
+# Publish address records + the service. Allow point-to-point (docker bridge).
+allow-point-to-point=yes
+publish-aaaa-on-ipv4=yes
+publish-a-on-ipv6=yes
+
+[reflector]
+enable-reflector=no
