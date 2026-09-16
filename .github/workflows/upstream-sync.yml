@@ -3,6 +3,11 @@ name: Sync upstream fork
 on:
   # Daily check for upstream changes (a cheap upstream-SHA ancestor check
   # skips the fetch/merge entirely when nothing changed).
+  #
+  # NOTE (fork): scheduled workflows in forks only fire after the workflow
+  # file has been re-validated by a push to the default branch, or after
+  # re-enabling in Settings -> Actions. If the daily run stops appearing,
+  # trigger a manual workflow_dispatch or push this file again.
   schedule:
     - cron: '23 3 * * *'
   # Allow manual runs from the Actions tab
@@ -113,4 +118,13 @@ jobs:
       - name: Report result
         if: always()
         run: |
+          set +e
+          echo "=== current HEAD ==="
           git log --oneline -2
+          echo "=== upstream sync status ==="
+          git fetch upstream master 2>/dev/null
+          if git merge-base --is-ancestor upstream/master HEAD; then
+            echo "IN SYNC: fork master contains upstream tip $(git rev-parse --short upstream/master)"
+          else
+            echo "OUT OF SYNC: upstream tip $(git rev-parse --short upstream/master) not merged yet"
+          fi
