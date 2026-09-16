@@ -16,6 +16,9 @@ COPY --from=build /usr/bin/mbusd /usr/bin/mbusd
 # Entrypoint starts dbus + avahi-daemon (for the mDNS announcement), then
 # execs the gateway. Preserves upstream's "override args via command" contract.
 COPY docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
+# Avahi daemon config template - announces _modbus-tcp._tcp on ALL connected
+# interfaces (entrypoint fills in %INTERFACES% from the container's NICs).
+COPY docker/avahi-daemon.conf.template /etc/mbusd-avahi.conf
 RUN chmod +x /usr/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 # Default args (override via `command` / docker run args):
