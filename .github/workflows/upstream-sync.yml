@@ -9,7 +9,7 @@ on:
   # re-enabling in Settings -> Actions. If the daily run stops appearing,
   # trigger a manual workflow_dispatch or push this file again.
   schedule:
-    - cron: '23 3 * * *'
+    - cron: '23 3 * * *'  # daily 03:23 UTC
   # Allow manual runs from the Actions tab
   workflow_dispatch:
 
