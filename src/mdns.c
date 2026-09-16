@@ -54,6 +54,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "cfg.h"
 #include "log.h"
@@ -247,11 +248,27 @@ mdns_init(const char *name, const char *host, unsigned short port)
     return RC_ERR;
   }
 
-  mdns_client = avahi_client_new(avahi_simple_poll_get(mdns_poll),
-                                 (AvahiClientFlags)0,
-                                 mdns_client_callback,
-                                 NULL,
-                                 &error);
+  /* Connect to the Avahi daemon. Right after a container starts (entrypoint
+   * launches dbus + avahi-daemon, then execs us) the daemon may not yet have
+   * registered on the system bus, so avahi_client_new() fails with
+   * AVAHI_ERR_NO_DAEMON ("Daemon not running"). Retry briefly (~6s) before
+   * giving up - announcements are best-effort and must not block startup. */
+  int mdns_attempt = 0;
+  do
+  {
+    mdns_client = avahi_client_new(avahi_simple_poll_get(mdns_poll),
+                                   (AvahiClientFlags)0,
+                                   mdns_client_callback,
+                                   NULL,
+                                   &error);
+    if (mdns_client || mdns_attempt >= 6)
+      break;
+    logw(1, "mdns: Avahi daemon not ready yet (%s), retrying... (%d/6)",
+         avahi_strerror(error), mdns_attempt + 1);
+    sleep(1);
+    mdns_attempt++;
+  } while (1);
+
   if (!mdns_client)
   {
     logw(1, "mdns: failed to connect to Avahi daemon (%s)",

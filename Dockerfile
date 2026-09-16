@@ -8,7 +8,10 @@ RUN cmake -DCMAKE_INSTALL_PREFIX=/usr .. && make && make install
 
 FROM alpine:latest AS scratch
 ENV QEMU_EXECVE=1
-RUN apk add --no-cache libc6-compat avahi
+# dbus: system D-Bus daemon (required by Avahi; provides dbus-daemon)
+# avahi: the mDNS responder daemon (avahi-daemon)
+# libc6-compat/gcompat: glibc shims for mbusd's binary
+RUN apk add --no-cache libc6-compat gcompat dbus avahi
 COPY --from=build /usr/bin/mbusd /usr/bin/mbusd
 # Entrypoint starts dbus + avahi-daemon (for the mDNS announcement), then
 # execs the gateway. Preserves upstream's "override args via command" contract.
