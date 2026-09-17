@@ -241,21 +241,44 @@ mdns_init(const char *name, const char *host, unsigned short port)
   }
 
   if (host && *host)
-    mdns_host = avahi_strdup(host);
+  {
+    /* Normalize an explicit host name: if it is not already an FQDN
+     * (no dot), append the mDNS domain '.local' - Avahi rejects bare
+     * single-label host names with AVAHI_ERR_INVALID_HOST_NAME. */
+    if (strchr(host, '.') == NULL)
+    {
+      size_t len = strlen(host) + strlen(".local") + 1;
+      mdns_host = avahi_malloc(len);
+      if (mdns_host)
+        snprintf(mdns_host, len, "%s.local", host);
+    }
+    if (!mdns_host)
+      mdns_host = avahi_strdup(host);
+  }
   else
   {
     /* Announce the container's hostname (e.g. 'mbusd' on the Docker
      * network) rather than an IP: the hostname is stable across container
      * restarts / network changes while IPs are not. Clients resolve it via
-     * Docker's embedded DNS (same network) or via mDNS (.local). */
+     * Docker's embedded DNS (same network) or via mDNS (.local).
+     *
+     * avahi_entry_group_add_service() requires an FQDN (single-label
+     * names are rejected with AVAHI_ERR_INVALID_HOST_NAME), so append the
+     * mDNS domain '.local'. */
     char buf[256];
+    const char *h = "mbusd";
     if (gethostname(buf, sizeof(buf)) == 0)
     {
       buf[sizeof(buf) - 1] = '\0';
-      mdns_host = avahi_strdup(buf);
+      if (buf[0])
+        h = buf;
     }
+    size_t len = strlen(h) + strlen(".local") + 1;
+    mdns_host = avahi_malloc(len);
+    if (mdns_host)
+      snprintf(mdns_host, len, "%s.local", h);
     if (!mdns_host)
-      mdns_host = avahi_strdup("mbusd");
+      mdns_host = avahi_strdup("mbusd.local");
   }
 
   mdns_poll = avahi_simple_poll_new();
