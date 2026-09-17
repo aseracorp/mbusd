@@ -8,13 +8,14 @@ host-name=mbusd
 allow-interfaces=%INTERFACES%
 # Don't ever think we are the only mDNS responder on the network; cooperate.
 disallow-other-stacks=no
+# Publish on point-to-point links (e.g. docker bridge / VPN) too.
+allow-point-to-point=yes
 
 [wide-area]
 enable-wide-area=no
 
 [publish]
-# Publish address records + the service. Allow point-to-point (docker bridge).
-allow-point-to-point=yes
+# Publish A + AAAA address records (multi-homed: one record per address).
 publish-aaaa-on-ipv4=yes
 publish-a-on-ipv6=yes
 
