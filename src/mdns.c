@@ -103,8 +103,10 @@ mdns_create_services(AvahiClient *client)
                                         mdns_name,
                                         MDNS_SERVICE_TYPE,
                                         NULL, /* domain: all */
-                                        NULL, /* host: auto (resolves to
-                                                 the announcing host name) */
+                                        mdns_host, /* host: announce the
+                                                      stable container
+                                                      hostname (e.g.
+                                                      'mbusd'), not the IP */
                                         mdns_port,
                                         NULL); /* no TXT records */
     if (ret < 0)
@@ -240,6 +242,21 @@ mdns_init(const char *name, const char *host, unsigned short port)
 
   if (host && *host)
     mdns_host = avahi_strdup(host);
+  else
+  {
+    /* Announce the container's hostname (e.g. 'mbusd' on the Docker
+     * network) rather than an IP: the hostname is stable across container
+     * restarts / network changes while IPs are not. Clients resolve it via
+     * Docker's embedded DNS (same network) or via mDNS (.local). */
+    char buf[256];
+    if (gethostname(buf, sizeof(buf)) == 0)
+    {
+      buf[sizeof(buf) - 1] = '\0';
+      mdns_host = avahi_strdup(buf);
+    }
+    if (!mdns_host)
+      mdns_host = avahi_strdup("mbusd");
+  }
 
   mdns_poll = avahi_simple_poll_new();
   if (!mdns_poll)
