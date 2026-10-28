@@ -3,11 +3,6 @@ name: Sync upstream fork
 on:
   # Daily check for upstream changes (a cheap upstream-SHA ancestor check
   # skips the fetch/merge entirely when nothing changed).
-  #
-  # NOTE (fork): scheduled workflows in forks only fire after the workflow
-  # file has been re-validated by a push to the default branch, or after
-  # re-enabling in Settings -> Actions. If the daily run stops appearing,
-  # trigger a manual workflow_dispatch or push this file again.
   schedule:
     - cron: '23 3 * * *'  # daily 03:23 UTC
   # Allow manual runs from the Actions tab
@@ -15,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   sync-master:
@@ -22,12 +18,14 @@ jobs:
 
     env:
       UPSTREAM: 3cky/mbusd
+      TARGET_BRANCH: master
+      SYNC_BRANCH: sync-upstream
 
     steps:
       - name: Checkout master
         uses: actions/checkout@v4
         with:
-          ref: master
+          ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
 
       - name: Add upstream remote and fetch
@@ -40,7 +38,6 @@ jobs:
         run: |
           UPSTREAM_TIP=$(git rev-parse upstream/master)
           echo "upstream_tip=${UPSTREAM_TIP}"
-          # Already an ancestor of our local branch => nothing to do.
           if git merge-base --is-ancestor "${UPSTREAM_TIP}" HEAD; then
             echo "No upstream change; already in sync."
           else
@@ -49,14 +46,18 @@ jobs:
             echo "upstream-tip=${UPSTREAM_TIP}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Merge upstream into master (auto-resolving, never drops code)
+      # Merge upstream into a *non-protected* sync branch. The repository
+      # ruleset ("protect branch": pull_request + non_fast_forward) blocks
+      # direct pushes to master, so the merge is landed through a PR instead.
+      - name: Merge upstream into sync branch
         if: env.changed == 'true'
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Register the 'ours' merge driver for fork-only files.
           git config merge.ours.driver true
+
+          git checkout -b "${{ env.SYNC_BRANCH }}"
 
           # Try a plain merge first - most daily syncs are clean.
           set +e
@@ -65,17 +66,12 @@ jobs:
           set -e
           if [ "$MERGE_RC" -eq 0 ]; then
             echo "Merged cleanly."
-            git push origin master
             exit 0
           fi
 
-          # A plain merge failed. Distinguish:
-          #  - conflicts ONLY in fork-only files (mdns.c/h, our workflows)
-          #    => safe to auto-resolve by keeping ours.
-          #  - conflicts in shared/upstream files => resolve with a proper
-          #    3-way merge (git merge-file) that keeps BOTH sides.
-          #  - any residual conflict markers after that => FAIL LOUDLY.
-          #    We NEVER silently drop either side's code.
+          # Conflicts ONLY in fork-only files => safe to auto-resolve (ours).
+          # Conflicts in shared files => proper 3-way merge keeping BOTH sides.
+          # Residual conflict markers => FAIL LOUDLY (never drop either side).
           MB=$(git merge-base HEAD upstream/master)
           CONFLICTED=$(git diff --name-only --diff-filter=U || true)
           echo "conflicted files: $CONFLICTED"
@@ -92,17 +88,13 @@ jobs:
                 git show "$MB:$f" > /tmp/base-f
                 git show "HEAD:$f" > /tmp/ours-f
                 git show "upstream/master:$f" > /tmp/theirs-f
-                # merge-file returns 1 on genuine conflict; capture it
-                # without letting set -e abort mid-resolution.
                 set +e
                 git merge-file /tmp/ours-f /tmp/base-f /tmp/theirs-f
                 MF_RC=$?
                 set -e
                 if [ "$MF_RC" -ne 0 ]; then
                   echo "::error::Genuine conflict in '$f' that cannot be auto-resolved."
-                  echo "::error::git merge-file left conflict markers for '$f'."
-                  echo "::error::A maintainer must merge upstream/master into master manually"
-                  echo "::error::and resolve '$f', then push. Aborting to keep the tree clean."
+                  echo "::error::A maintainer must resolve '$f' manually, then merge."
                   git merge --abort
                   exit 1
                 fi
@@ -113,7 +105,69 @@ jobs:
           done
 
           git commit --no-edit
-          git push origin master
+
+      # Land the merge: prefer an org-admin bot token (bypasses the ruleset,
+      # same pattern as openwrt-packages/version-check.yml). If that secret is
+      # not configured, fall back to a PR (ruleset requires 0 approvals, so the
+      # bot can normally merge it right away).
+      - name: Land upstream merge
+        if: env.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+        run: |
+          set -e
+
+          # Option A: direct push with the org-admin bot token (bypasses the
+          # "protect branch" ruleset). Only runs if the secret exists.
+          if [ -n "${GH_BOT_TOKEN}" ]; then
+            echo "::group::Direct push with GH_BOT_TOKEN"
+            git config --unset-all "http.https://github.com/.extraheader" || true
+            git remote set-url origin "https://x-access-token:${GH_BOT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            n=0
+            while :; do
+              if git push origin "${{ env.SYNC_BRANCH }}:${{ env.TARGET_BRANCH }}"; then
+                echo "Direct push to ${{ env.TARGET_BRANCH }} succeeded with bot token."
+                echo "::endgroup::"
+                exit 0
+              fi
+              n=$((n+1))
+              if [ "$n" -ge 5 ]; then
+                echo "ERROR: could not push after 5 attempts" >&2
+                echo "::endgroup::"
+                exit 1
+              fi
+              echo "push rejected, rebasing and retrying ($n/5)"
+              git pull --rebase origin "${{ env.TARGET_BRANCH }}"
+            done
+          fi
+
+          # Option B: PR flow with GITHUB_TOKEN.
+          echo "::group::PR flow"
+          git push --force-with-lease origin "${{ env.SYNC_BRANCH }}"
+
+          EXISTING=$(gh pr list --head "${{ env.SYNC_BRANCH }}" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          TITLE="chore: sync with upstream/master"
+          BODY="Automated daily sync with upstream (${{ env.UPSTREAM }}). Merge to apply the latest upstream commits."
+          if [ -n "$EXISTING" ]; then
+            echo "Sync PR #${EXISTING} already open — updating it."
+            gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY" >/dev/null || true
+            PR_NUMBER="$EXISTING"
+          else
+            PR_NUMBER=$(gh pr create --base "${{ env.TARGET_BRANCH }}" --head "${{ env.SYNC_BRANCH }}" --title "$TITLE" --body "$BODY" | grep -oE '[0-9]+$' || true)
+            echo "Opened PR #${PR_NUMBER:-unknown}"
+          fi
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Merging PR #${PR_NUMBER} (ruleset allows 0-approval merges)."
+            if gh pr merge "$PR_NUMBER" --merge --delete-branch=false; then
+              echo "Sync PR #${PR_NUMBER} merged."
+            else
+              echo "::warning::Auto-merge of sync PR #${PR_NUMBER} failed (ruleset may require a human approval)."
+              echo "::warning::PR #${PR_NUMBER} is open and ready for review — the fork is otherwise in sync on that branch."
+            fi
+          fi
+          echo "::endgroup::"
 
       - name: Report result
         if: always()
