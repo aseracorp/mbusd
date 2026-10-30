@@ -82,6 +82,7 @@ cfg_init(void)
   cfg.replyonbroadcast=0;
   cfg.mdns = TRUE;
   *cfg.mdnsname = '\0';
+  cfg.local_echo = false;
 }
 
 int
@@ -162,6 +163,10 @@ cfg_handle_param(char *name, char *value)
       CFG_ERR("invalid wait value: %s", value);
       return 0;
     }
+  }
+  else if (CFG_NAME_MATCH("local_echo"))
+  {
+    cfg.local_echo = CFG_VALUE_BOOL();
   }
    else if (CFG_NAME_MATCH("replyonbroadcast"))
   {

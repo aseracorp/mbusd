@@ -18,6 +18,7 @@ Features:
 * Support for both of automatic and manual (using RTS bit) direction control types for RS-485 transceivers
 * mDNS/DNS-SD service announcement - the Modbus TCP endpoint is announced as
   `_modbus-tcp._tcp` on the local network for automatic discovery (requires Avahi)
+* Optional local echo handling for RS-485 adapters that receive their own transmissions
 
 Supported function codes:
 -------------------------
@@ -54,9 +55,9 @@ can be altered in many ways, e.g. by using the following tools in the `build` di
 Usage:
 ------
 
-       mbusd [-h] [-d] [-L logfile] [-v level] [-c cfgfile] 
-             [-p device] [-s speed] [-m mode] [-S]
-             [-t] [-r] [-y sysfsfile] [-Y sysfsfile] 
+       mbusd [-h] [-d] [-L logfile] [-v level] [-c cfgfile]
+             [-p device] [-s speed] [-m mode] [-e] [-S]
+             [-t] [-r] [-y sysfsfile] [-Y sysfsfile]
              [-A address] [-P port] [-C maxconn] [-N retries]
              [-R pause] [-W wait] [-T timeout] [-b] [-M mdnsname]
 
@@ -66,8 +67,8 @@ Usage:
               Specifies log file name ('-' for logging to STDOUT only, relative path or bare filename
               will be stored at /var/log, default is /var/log/mbusd.log).
        -v level
-              Specifies log verbosity level (0 for errors only, 1 for warnings and 2 for informational 
-              messages also). If mbusd was compiled in debug mode, valid log levels are up to 9, 
+              Specifies log verbosity level (0 for errors only, 1 for warnings and 2 for informational
+              messages also). If mbusd was compiled in debug mode, valid log levels are up to 9,
               where log levels above 2 adds logging of information about additional internal events.
        -c cfgfile
               Read configuration from cfgfile.
@@ -77,6 +78,7 @@ Usage:
               Specifies serial port speed.
        -m mode
               Specifies serial port mode (like 8N1).
+       -e     Discard local echo of transmitted RTU requests.
        -S     Enable RS-485 support for given serial port device (Linux only)
        -t     Enable RTS RS-485 data direction control using RTS, active transmit.
        -r     Enable RTS RS-485 data direction control using RTS, active receive.
@@ -180,17 +182,15 @@ please do not send bug reports via personal email.
 
 ### Building and Testing
 
-Dependencies: please see the correct OS-distribution section in the
- [.gitlab-ci.yml](https://github.com/3cky/mbusd/blob/master/.gitlab-ci.yml)
+The integration suite uses Python 3, `socat`, and the Python packages installed
+by [the GitHub Actions workflow](.github/workflows/build.yml).
 
-With all dependencies met, one is able to *build and execute tests*
-issuing the following *bash* commands:
-```
-# build
-mkdir output.dir/ && cd $_
-cmake ../ && make
-# execute all tests
-(cd ../ && python tests/run_itests.py output.dir/mbusd)
+Build and run all tests from the repository root:
+
+```shell
+cmake -S . -B build
+cmake --build build
+(cd build && ctest --output-on-failure)
 ```
 
 Author:
@@ -213,6 +213,9 @@ Luuk Loeffen (<luukloeffen@hotmail.com>):
 
 Nick Mayerhofer (<nick.mayerhofer@enchant.at>):
  - CMake build system
+
+Adam Prescott (<adam@nemiah.uk>):
+ - optional RS-485 local echo handling and regression tests
 
 License:
 --------
