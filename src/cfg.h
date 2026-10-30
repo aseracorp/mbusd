@@ -84,6 +84,8 @@ typedef struct
   bool mdns;
   /* mDNS/DNS-SD announcement instance name (may be empty) */
   char mdnsname[INTBUFSIZE + 1];
+  /* Discard one exact echoed RTU request before parsing the response. */
+  bool local_echo;
 } cfg_t;
 
 /* Prototypes */
